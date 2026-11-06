@@ -19,6 +19,7 @@ import { Restaurant, Captain } from '../../types';
 import { RestaurantService } from '../../services/restaurantService';
 import { CaptainService } from '../../services/captainService';
 import { OrderService } from '../../services/orderService';
+import { ShiftService } from '../../services/shiftService';
 import { useToast } from '../../contexts/ToastContext';
 
 interface SendOrderModalProps {
@@ -142,6 +143,13 @@ export const SendOrderModal: React.FC<SendOrderModalProps> = ({
 
     if (!selectedCaptain) {
       toastError('يرجى تحديد كابتن التوصيل المستلم للطلب');
+      return;
+    }
+
+    // Strict shift hours check: Do not allow assigning new orders outside active work hours
+    const eligibility = await ShiftService.verifyCaptainOrderEligibility(selectedCaptain.id);
+    if (!eligibility.isEligible) {
+      toastError(eligibility.reason || 'الكابتن المحدد خارج ساعات العمل المحددة له في الشفت، ولا يمكن إسناد طلبات جديدة إليه.');
       return;
     }
 

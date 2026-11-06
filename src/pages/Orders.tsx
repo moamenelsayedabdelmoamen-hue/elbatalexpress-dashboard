@@ -24,6 +24,7 @@ import {
 import { Order, OrderStatus, Captain } from '../types';
 import { OrderService } from '../services/orderService';
 import { CaptainService } from '../services/captainService';
+import { ShiftService } from '../services/shiftService';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { EmptyState } from '../components/common/EmptyState';
 import { useToast } from '../contexts/ToastContext';
@@ -261,6 +262,14 @@ export const OrdersPage: React.FC = () => {
     if (!captainId) return;
     const captain = captains.find((c) => c.id === captainId);
     const captainName = captain?.name || 'كابتن معتمد';
+
+    // Strict shift hours check: Do not allow assigning new orders outside active work hours
+    const eligibility = await ShiftService.verifyCaptainOrderEligibility(captainId);
+    if (!eligibility.isEligible) {
+      toastError(eligibility.reason || 'الكابتن المحدد خارج ساعات العمل المحددة له في الشفت، ولا يمكن إسناد طلبات جديدة إليه.');
+      return;
+    }
+
     try {
       await OrderService.assignCaptain(orderId, captainId, captainName);
       setOrders((prev) =>
