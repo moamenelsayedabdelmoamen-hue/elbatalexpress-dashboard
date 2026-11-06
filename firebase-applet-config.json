@@ -1,11 +1,12 @@
 {
   "projectId": "el-batal-express-956ae",
-  "appId": "1:877386066216:web:c08c681e0c2d7563cd081d",
+  "appId": "1:877386066216:web:b74914c0dc38501bcd081d",
   "apiKey": "AIzaSyAsXpoAY4bhwE6krsdCcBKrUMw7SHnb7Xc",
   "authDomain": "el-batal-express-956ae.firebaseapp.com",
+  "databaseURL": "https://el-batal-express-956ae-default-rtdb.firebaseio.com",
   "storageBucket": "el-batal-express-956ae.firebasestorage.app",
   "messagingSenderId": "877386066216",
-  "measurementId": "G-WP7JQQE26B",
+  "measurementId": "G-T5ESTNN6JY",
   "oAuthClientId": "791072655954-p2ckreic604fvu67adds3gn697e5suki.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

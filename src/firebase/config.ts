@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth, GoogleAuthProvider } from 'firebase/auth';
+import { getAnalytics, isSupported } from 'firebase/analytics';
 import {
   initializeFirestore,
   getFirestore,
@@ -20,6 +21,7 @@ setLogLevel('error');
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || (firebaseAppletConfig as Record<string, any>).databaseURL || 'https://el-batal-express-956ae-default-rtdb.firebaseio.com',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId,
   firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || (firebaseAppletConfig as Record<string, any>).firestoreDatabaseId || undefined,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket,
@@ -44,6 +46,19 @@ let storage: FirebaseStorage;
 try {
   app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   auth = getAuth(app);
+
+  // Initialize Analytics in browser if supported
+  if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
+    isSupported().then((supported) => {
+      if (supported) {
+        try {
+          getAnalytics(app);
+        } catch {
+          // ignore analytics initialization hiccups
+        }
+      }
+    });
+  }
 
   // Configure Firestore with long-polling and multi-tab local persistence
   // experimentalForceLongPolling completely prevents duplex HTTP/2 WebChannel stream failures in sandboxed iframe/proxy environments.
