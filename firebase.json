@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "elbatalexpress",
     "public": "dist",
     "ignore": [
       "firebase.json",
@@ -35,5 +36,13 @@
   },
   "firestore": {
     "rules": "firestore.rules"
+  },
+  "emulators": {
+    "dataconnect": {
+      "dataDir": "dataconnect/.dataconnect/pgliteData"
+    }
+  },
+  "dataconnect": {
+    "source": "dataconnect"
   }
 }
