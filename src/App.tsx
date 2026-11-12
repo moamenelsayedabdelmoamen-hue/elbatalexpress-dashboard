@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { DashboardLayout } from './layouts/DashboardLayout';
 
@@ -25,35 +26,37 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
-          <Routes>
-            {/* Public authentication routes */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register-admin" element={<RegisterAdminPage />} />
+          <NotificationProvider>
+            <Routes>
+              {/* Public authentication routes */}
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register-admin" element={<RegisterAdminPage />} />
 
-            {/* Protected Admin Routes */}
-            <Route element={<ProtectedRoute />}>
-              <Route element={<DashboardLayout />}>
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/live-map" element={<LiveMapPage />} />
-                <Route path="/send-order" element={<SendOrderPage />} />
-                <Route path="/shifts" element={<CaptainShiftsPage />} />
-                <Route path="/restaurants" element={<RestaurantsPage />} />
-                <Route path="/restaurants/:restaurantId/orders" element={<OrdersPage />} />
-                <Route path="/captains" element={<CaptainsPage />} />
-                <Route path="/orders" element={<OrdersPage />} />
-                <Route path="/subscriptions" element={<SubscriptionsPage />} />
-                <Route path="/payments" element={<PaymentsPage />} />
-                <Route path="/sheets" element={<GoogleSheetsPage />} />
-                <Route path="/admins" element={<AdminsPage />} />
-                <Route path="/admins/new" element={<RegisterAdminPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
+              {/* Protected Admin Routes */}
+              <Route element={<ProtectedRoute />}>
+                <Route element={<DashboardLayout />}>
+                  <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/live-map" element={<LiveMapPage />} />
+                  <Route path="/send-order" element={<SendOrderPage />} />
+                  <Route path="/shifts" element={<CaptainShiftsPage />} />
+                  <Route path="/restaurants" element={<RestaurantsPage />} />
+                  <Route path="/restaurants/:restaurantId/orders" element={<OrdersPage />} />
+                  <Route path="/captains" element={<CaptainsPage />} />
+                  <Route path="/orders" element={<OrdersPage />} />
+                  <Route path="/subscriptions" element={<SubscriptionsPage />} />
+                  <Route path="/payments" element={<PaymentsPage />} />
+                  <Route path="/sheets" element={<GoogleSheetsPage />} />
+                  <Route path="/admins" element={<AdminsPage />} />
+                  <Route path="/admins/new" element={<RegisterAdminPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Route>
               </Route>
-            </Route>
 
-            {/* Redirects */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
+              {/* Redirects */}
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </NotificationProvider>
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>

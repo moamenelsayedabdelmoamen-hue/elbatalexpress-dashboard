@@ -65,7 +65,7 @@ export const DashboardPage: React.FC = () => {
 
   const statCards = [
     {
-      title: 'إجمالي المطاعم',
+      title: 'إجمالي التجار',
       value: stats?.totalRestaurants ?? 0,
       icon: UtensilsCrossed,
       link: '/restaurants',
@@ -74,13 +74,13 @@ export const DashboardPage: React.FC = () => {
       badge: `${stats?.activeRestaurants ?? 0} نشط`,
     },
     {
-      title: 'المطاعم النشطة',
+      title: 'التجار النشطون',
       value: stats?.activeRestaurants ?? 0,
       icon: Activity,
       link: '/restaurants',
       color: 'from-emerald-500/20 to-emerald-600/5',
       iconColor: 'text-emerald-400',
-      badge: 'متصلة الآن',
+      badge: 'متصلون الآن',
     },
     {
       title: 'إجمالي الكباتن',
@@ -257,8 +257,8 @@ export const DashboardPage: React.FC = () => {
                 <UtensilsCrossed className="w-4 h-4" />
               </div>
               <div>
-                <span>إدارة المطاعم</span>
-                <span className="text-[11px] text-zinc-500 block font-normal">{stats?.activeRestaurants ?? 3} متصل ومعتمد</span>
+                <span>إدارة التجار</span>
+                <span className="text-[11px] text-zinc-500 block font-normal">{stats?.activeRestaurants ?? 0} متصل ومعتمد</span>
               </div>
             </div>
             <ArrowUpLeft className="w-4 h-4 text-zinc-500 group-hover:text-amber-400 transition-colors" />
@@ -274,7 +274,7 @@ export const DashboardPage: React.FC = () => {
               </div>
               <div>
                 <span>متابعة الكباتن الميدانيين</span>
-                <span className="text-[11px] text-zinc-500 block font-normal">{stats?.activeCaptains ?? 3} جاهز للتوصيل</span>
+                <span className="text-[11px] text-zinc-500 block font-normal">{stats?.activeCaptains ?? 0} جاهز للتوصيل</span>
               </div>
             </div>
             <ArrowUpLeft className="w-4 h-4 text-zinc-500 group-hover:text-blue-400 transition-colors" />
@@ -290,7 +290,7 @@ export const DashboardPage: React.FC = () => {
               </div>
               <div>
                 <span>خطط وباقات الاشتراكات</span>
-                <span className="text-[11px] text-zinc-500 block font-normal">باقات 400 - 1000 ج.م</span>
+                <span className="text-[11px] text-zinc-500 block font-normal">باقات 400 - 1600 ج.م</span>
               </div>
             </div>
             <ArrowUpLeft className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
@@ -362,7 +362,7 @@ export const DashboardPage: React.FC = () => {
               <thead>
                 <tr className="border-b border-zinc-800/80 text-xs font-bold text-zinc-400">
                   <th className="py-3 px-4">رقم الطلب</th>
-                  <th className="py-3 px-4">المطعم</th>
+                  <th className="py-3 px-4">اسم التاجر</th>
                   <th className="py-3 px-4">العميل</th>
                   <th className="py-3 px-4">الكابتن</th>
                   <th className="py-3 px-4">المبلغ</th>

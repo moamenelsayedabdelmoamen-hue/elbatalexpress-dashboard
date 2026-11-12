@@ -14,8 +14,55 @@ import { Order, OrderStatus } from '../types';
 
 let localOrdersCache: Order[] = [];
 
+export function parseAnyTimestampToIso(rawVal: any): string {
+  if (!rawVal) return '';
+  try {
+    if (typeof rawVal === 'object' && typeof rawVal.toDate === 'function') {
+      return rawVal.toDate().toISOString();
+    }
+    if (typeof rawVal === 'object' && typeof rawVal.seconds === 'number') {
+      return new Date(rawVal.seconds * 1000).toISOString();
+    }
+    if (rawVal instanceof Date) {
+      return rawVal.toISOString();
+    }
+    if (typeof rawVal === 'number') {
+      const ms = rawVal < 10000000000 ? rawVal * 1000 : rawVal;
+      return new Date(ms).toISOString();
+    }
+    if (typeof rawVal === 'string') {
+      const trimmed = rawVal.trim();
+      if (!trimmed) return '';
+      const d = new Date(trimmed);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString();
+      }
+      return trimmed;
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+}
+
+export function formatDurationArabic(seconds: number): string {
+  if (seconds < 0 || isNaN(seconds)) seconds = 0;
+  const rounded = Math.round(seconds);
+  if (rounded === 0) return 'أقل من ثانية';
+  if (rounded < 60) {
+    return `${rounded} ثانية`;
+  }
+  const mins = Math.floor(rounded / 60);
+  const remSecs = rounded % 60;
+  if (mins < 60) {
+    return remSecs > 0 ? `${mins} دقيقة و ${remSecs} ث` : `${mins} دقيقة`;
+  }
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins > 0 ? `${hours} ساعة و ${remMins} د` : `${hours} ساعة`;
+}
+
 function mapDocToOrder(id: string, data: Record<string, any>): Order {
-  // Extract real delivery fee added by restaurant in Firestore
   const rawDeliveryFee =
     data.deliveryFee !== undefined
       ? data.deliveryFee
@@ -54,9 +101,8 @@ function mapDocToOrder(id: string, data: Record<string, any>): Order {
   const realDeliveryFee =
     typeof rawDeliveryFee === 'number'
       ? rawDeliveryFee
-      : (parseFloat(String(rawDeliveryFee).replace(/[^\d.-]/g, '')) || 0);
+      : parseFloat(String(rawDeliveryFee).replace(/[^\d.-]/g, '')) || 0;
 
-  // Real order identifier in Firestore
   const realOrderNumber =
     data.orderNumber !== undefined && data.orderNumber !== null && data.orderNumber !== ''
       ? data.orderNumber
@@ -85,45 +131,127 @@ function mapDocToOrder(id: string, data: Record<string, any>): Order {
     data.captain?.displayName ||
     '';
 
-    const rawCreatedAt =
-      data.createdAt ||
-      data.created_at ||
-      data.orderDate ||
-      data.order_date ||
-      data.date ||
-      data.timestamp ||
-      data.time;
+  const rawCreatedAt =
+    data.createdAt ||
+    data.created_at ||
+    data.orderDate ||
+    data.order_date ||
+    data.date ||
+    data.timestamp ||
+    data.time;
 
-    let parsedCreatedAt = new Date().toISOString();
-    if (rawCreatedAt) {
-      if (typeof rawCreatedAt === 'object' && typeof rawCreatedAt.toDate === 'function') {
-        parsedCreatedAt = rawCreatedAt.toDate().toISOString();
-      } else if (rawCreatedAt instanceof Date) {
-        parsedCreatedAt = rawCreatedAt.toISOString();
-      } else if (typeof rawCreatedAt === 'number') {
-        // could be seconds timestamp or ms
-        const ms = rawCreatedAt < 10000000000 ? rawCreatedAt * 1000 : rawCreatedAt;
-        parsedCreatedAt = new Date(ms).toISOString();
-      } else if (typeof rawCreatedAt === 'string') {
-        parsedCreatedAt = rawCreatedAt;
-      }
+  const parsedCreatedAt = parseAnyTimestampToIso(rawCreatedAt) || new Date().toISOString();
+
+  // Stage Timestamps
+  const timestampsObj = typeof data.timestamps === 'object' && data.timestamps ? data.timestamps : {};
+  const historyObj = typeof data.statusHistory === 'object' && data.statusHistory ? data.statusHistory : {};
+
+  const assignedAt = parseAnyTimestampToIso(
+    data.assignedAt ||
+      data.assigned_at ||
+      data.captainAssignedAt ||
+      timestampsObj.assignedAt
+  );
+
+  const acceptedAt = parseAnyTimestampToIso(
+    data.acceptedAt ||
+      data.accepted_at ||
+      data.captainAcceptedAt ||
+      data.captain_accepted_at ||
+      timestampsObj.acceptedAt ||
+      historyObj.Accepted ||
+      assignedAt
+  );
+
+  const arrivedAtMerchantAt = parseAnyTimestampToIso(
+    data.arrivedAtMerchantAt ||
+      data.arrived_at_merchant_at ||
+      data.arrivedAtRestaurantAt ||
+      data.arrived_at_restaurant_at ||
+      data.arrivedAtStoreAt ||
+      data.arrivedAt ||
+      data.merchantArrivalTime ||
+      data.readyAt ||
+      timestampsObj.arrivedAtMerchantAt ||
+      timestampsObj.arrivedAtMerchant ||
+      historyObj.Ready
+  );
+
+  const pickedUpAt = parseAnyTimestampToIso(
+    data.pickedUpAt ||
+      data.picked_up_at ||
+      data.receivedFromMerchantAt ||
+      data.received_from_merchant_at ||
+      data.pickupTime ||
+      data.pickedAt ||
+      timestampsObj.pickedUpAt ||
+      historyObj['Picked Up']
+  );
+
+  const deliveredAt = parseAnyTimestampToIso(
+    data.deliveredAt ||
+      data.delivered_at ||
+      data.completedAt ||
+      data.completed_at ||
+      data.deliveryTime ||
+      timestampsObj.deliveredAt ||
+      historyObj.Delivered
+  );
+
+  // Calculate Captain Search Duration
+  let captainSearchSeconds: number | undefined =
+    typeof data.captainSearchSeconds === 'number'
+      ? data.captainSearchSeconds
+      : typeof data.searchDurationSeconds === 'number'
+      ? data.searchDurationSeconds
+      : undefined;
+
+  let captainSearchDuration: string | undefined =
+    data.captainSearchDuration || data.searchDurationText || undefined;
+
+  if (captainSearchSeconds === undefined && acceptedAt && parsedCreatedAt) {
+    const startMs = new Date(parsedCreatedAt).getTime();
+    const endMs = new Date(acceptedAt).getTime();
+    if (!isNaN(startMs) && !isNaN(endMs) && endMs >= startMs) {
+      captainSearchSeconds = Math.round((endMs - startMs) / 1000);
     }
+  }
+
+  if (!captainSearchDuration && captainSearchSeconds !== undefined) {
+    captainSearchDuration = formatDurationArabic(captainSearchSeconds);
+  }
+
+  const distanceToMerchantKm =
+    typeof data.distanceToMerchantKm === 'number' ? data.distanceToMerchantKm : undefined;
 
   return {
     id,
     orderNumber: String(realOrderNumber),
     restaurantId: data.restaurantId || data.restaurant?.id || '',
-    restaurantName: data.restaurantName || data.restaurant?.name || 'مطعم غير محدد',
+    restaurantName: data.restaurantName || data.merchantName || data.restaurant?.name || 'تاجر غير محدد',
     customerName: data.customerName || data.customer?.name || 'عميل',
     customerPhone: data.customerPhone || data.customer?.phone || '',
     deliveryAddress: data.deliveryAddress || data.address || '',
     captainId: realCaptainId,
     captainName: realCaptainName,
-    subtotal: typeof data.subtotal === 'number' ? data.subtotal : (typeof data.itemsTotal === 'number' ? data.itemsTotal : (data.total || 0)),
+    subtotal:
+      typeof data.subtotal === 'number'
+        ? data.subtotal
+        : typeof data.itemsTotal === 'number'
+        ? data.itemsTotal
+        : data.total || 0,
     deliveryFee: realDeliveryFee,
     total: typeof data.total === 'number' ? data.total : 0,
     status: (data.status as OrderStatus) || 'New',
     createdAt: parsedCreatedAt,
+    assignedAt,
+    acceptedAt,
+    arrivedAtMerchantAt,
+    pickedUpAt,
+    deliveredAt,
+    captainSearchDuration,
+    captainSearchSeconds,
+    distanceToMerchantKm,
     items: data.items || [],
     raw: data,
   };
@@ -141,7 +269,6 @@ export const OrderService = {
         const q = query(collection(db, COLLECTIONS.ORDERS), orderBy('createdAt', 'desc'));
         snapshot = await getDocs(q);
       } catch (err) {
-        // Fallback if orderBy index is missing or field name varies
         snapshot = await getDocs(collection(db, COLLECTIONS.ORDERS));
       }
 
@@ -155,7 +282,6 @@ export const OrderService = {
         list.push(mapDocToOrder(docSnap.id, docSnap.data()));
       });
 
-      // Sort in-memory desc by createdAt
       list.sort((a, b) => {
         const timeA = new Date(a.createdAt).getTime() || 0;
         const timeB = new Date(b.createdAt).getTime() || 0;
@@ -170,25 +296,116 @@ export const OrderService = {
     }
   },
 
-  async updateStatus(id: string, newStatus: OrderStatus): Promise<void> {
+  async updateStatus(id: string, newStatus: OrderStatus): Promise<Partial<Order>> {
+    const nowIso = new Date().toISOString();
+    const existing = localOrdersCache.find((o) => o.id === id);
+
+    const stageUpdates: Partial<Order> = { status: newStatus };
+    const firestoreUpdates: Record<string, any> = {
+      status: newStatus,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (newStatus === 'Accepted' && !existing?.acceptedAt) {
+      stageUpdates.acceptedAt = nowIso;
+      firestoreUpdates.acceptedAt = nowIso;
+      if (existing?.createdAt && existing.captainSearchSeconds === undefined) {
+        const startMs = new Date(existing.createdAt).getTime();
+        const endMs = Date.now();
+        if (!isNaN(startMs) && endMs >= startMs) {
+          const secs = Math.round((endMs - startMs) / 1000);
+          stageUpdates.captainSearchSeconds = secs;
+          stageUpdates.captainSearchDuration = formatDurationArabic(secs);
+          firestoreUpdates.captainSearchSeconds = secs;
+          firestoreUpdates.captainSearchDuration = stageUpdates.captainSearchDuration;
+        }
+      }
+    } else if ((newStatus === 'Preparing' || newStatus === 'Ready') && !existing?.arrivedAtMerchantAt) {
+      stageUpdates.arrivedAtMerchantAt = nowIso;
+      firestoreUpdates.arrivedAtMerchantAt = nowIso;
+    } else if (newStatus === 'Picked Up' && !existing?.pickedUpAt) {
+      stageUpdates.pickedUpAt = nowIso;
+      firestoreUpdates.pickedUpAt = nowIso;
+    } else if (newStatus === 'Delivered' && !existing?.deliveredAt) {
+      stageUpdates.deliveredAt = nowIso;
+      firestoreUpdates.deliveredAt = nowIso;
+    }
+
     localOrdersCache = localOrdersCache.map((order) =>
-      order.id === id ? { ...order, status: newStatus } : order
+      order.id === id ? { ...order, ...stageUpdates } : order
     );
 
     if (isFirebaseConfigured) {
       try {
         const docRef = doc(db, COLLECTIONS.ORDERS, id);
-        await updateDoc(docRef, {
-          status: newStatus,
-          updatedAt: serverTimestamp(),
-        });
+        await updateDoc(docRef, firestoreUpdates);
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, `${COLLECTIONS.ORDERS}/${id}`);
       }
     }
+
+    return stageUpdates;
   },
 
-  async assignCaptain(orderId: string, captainId: string, captainName: string): Promise<void> {
+  async recordStageTimestamp(
+    orderId: string,
+    field: 'acceptedAt' | 'arrivedAtMerchantAt' | 'pickedUpAt' | 'deliveredAt',
+    customIso?: string
+  ): Promise<string> {
+    const timestampIso = customIso || new Date().toISOString();
+
+    localOrdersCache = localOrdersCache.map((o) =>
+      o.id === orderId ? { ...o, [field]: timestampIso } : o
+    );
+
+    if (isFirebaseConfigured) {
+      try {
+        const docRef = doc(db, COLLECTIONS.ORDERS, orderId);
+        await updateDoc(docRef, {
+          [field]: timestampIso,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `${COLLECTIONS.ORDERS}/${orderId}`);
+        throw error;
+      }
+    }
+
+    return timestampIso;
+  },
+
+  async assignCaptain(
+    orderId: string,
+    captainId: string,
+    captainName: string,
+    extra?: {
+      searchDurationSeconds?: number;
+      searchDurationText?: string;
+      distanceToMerchantKm?: number;
+    }
+  ): Promise<{
+    acceptedAt: string;
+    captainSearchDuration: string;
+    captainSearchSeconds: number;
+    distanceToMerchantKm?: number;
+  }> {
+    const nowIso = new Date().toISOString();
+    const existing = localOrdersCache.find((o) => o.id === orderId);
+
+    let searchSecs = extra?.searchDurationSeconds;
+    if (searchSecs === undefined && existing?.createdAt) {
+      const createdMs = new Date(existing.createdAt).getTime();
+      const nowMs = Date.now();
+      if (!isNaN(createdMs) && nowMs >= createdMs) {
+        searchSecs = Math.round((nowMs - createdMs) / 1000);
+      }
+    }
+    if (searchSecs === undefined) {
+      searchSecs = 1;
+    }
+
+    const searchDurationText = extra?.searchDurationText || formatDurationArabic(searchSecs);
+
     localOrdersCache = localOrdersCache.map((order) =>
       order.id === orderId
         ? {
@@ -196,6 +413,13 @@ export const OrderService = {
             captainId,
             captainName,
             status: order.status === 'New' ? 'Accepted' : order.status,
+            assignedAt: nowIso,
+            acceptedAt: order.acceptedAt || nowIso,
+            captainSearchSeconds: searchSecs,
+            captainSearchDuration: searchDurationText,
+            ...(extra?.distanceToMerchantKm !== undefined
+              ? { distanceToMerchantKm: extra.distanceToMerchantKm }
+              : {}),
           }
         : order
     );
@@ -203,7 +427,7 @@ export const OrderService = {
     if (isFirebaseConfigured) {
       try {
         const docRef = doc(db, COLLECTIONS.ORDERS, orderId);
-        await updateDoc(docRef, {
+        const payload: Record<string, any> = {
           captainId,
           captainName,
           captain: {
@@ -211,12 +435,27 @@ export const OrderService = {
             name: captainName,
           },
           status: 'Accepted',
+          assignedAt: nowIso,
+          acceptedAt: existing?.acceptedAt || nowIso,
+          captainSearchSeconds: searchSecs,
+          captainSearchDuration: searchDurationText,
           updatedAt: serverTimestamp(),
-        });
+        };
+        if (extra?.distanceToMerchantKm !== undefined) {
+          payload.distanceToMerchantKm = extra.distanceToMerchantKm;
+        }
+        await updateDoc(docRef, payload);
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, `${COLLECTIONS.ORDERS}/${orderId}`);
       }
     }
+
+    return {
+      acceptedAt: existing?.acceptedAt || nowIso,
+      captainSearchDuration: searchDurationText,
+      captainSearchSeconds: searchSecs,
+      distanceToMerchantKm: extra?.distanceToMerchantKm,
+    };
   },
 
   async create(data: {
@@ -234,12 +473,13 @@ export const OrderService = {
     items?: { name: string; quantity: number; price: number }[];
   }): Promise<Order> {
     const timestamp = Date.now();
+    const nowIso = new Date().toISOString();
     const newId = `ord_${timestamp}`;
     const orderNumber = `#ELB-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const deliveryFee = Number(data.deliveryFee ?? 0);
     const subtotal = Number(data.subtotal ?? 0);
-    const total = Number(data.total ?? (subtotal + deliveryFee));
+    const total = Number(data.total ?? subtotal + deliveryFee);
 
     const newOrder: Order = {
       id: newId,
@@ -254,8 +494,12 @@ export const OrderService = {
       subtotal,
       deliveryFee,
       total,
-      status: 'Accepted', // Dispatched directly by admin to captain
-      createdAt: new Date().toISOString(),
+      status: 'Accepted',
+      createdAt: nowIso,
+      assignedAt: nowIso,
+      acceptedAt: nowIso,
+      captainSearchSeconds: 1,
+      captainSearchDuration: '1 ثانية',
       items: data.items && data.items.length > 0 ? data.items : [],
       raw: {
         ...data,
@@ -290,6 +534,10 @@ export const OrderService = {
           subtotal,
           total,
           status: 'Accepted',
+          assignedAt: nowIso,
+          acceptedAt: nowIso,
+          captainSearchSeconds: 1,
+          captainSearchDuration: '1 ثانية',
           notes: data.notes || '',
           items: newOrder.items,
           dispatchedBy: 'admin',

@@ -14,6 +14,7 @@ export const COLLECTIONS = {
   ADMINS: 'admins',
   USERS: 'users',
   CAPTAIN_SCHEDULES: 'captain_schedules',
+  NOTIFICATIONS: 'notifications',
 } as const;
 
 export const RESTAURANT_FIELDS = {
@@ -46,8 +47,8 @@ export const ORDER_FIELDS = {
 } as const;
 
 export const SUBSCRIPTION_PLANS = [
-  { captainsCount: 2, price: 400, label: 'خطة 2 كباتن (400 ج.م)' },
-  { captainsCount: 4, price: 600, label: 'خطة 4 كباتن (600 ج.م)' },
-  { captainsCount: 6, price: 800, label: 'خطة 6 كباتن (800 ج.م)' },
-  { captainsCount: 8, price: 1000, label: 'خطة 8 كباتن (1000 ج.م)' },
+  { captainsCount: 2, price: 400, label: '2 كابتن - 400 جنيه' },
+  { captainsCount: 4, price: 800, label: '4 كابتن - 800 جنيه' },
+  { captainsCount: 6, price: 1200, label: '6 كابتن - 1200 جنيه' },
+  { captainsCount: 8, price: 1600, label: '8 كابتن - 1600 جنيه' },
 ] as const;

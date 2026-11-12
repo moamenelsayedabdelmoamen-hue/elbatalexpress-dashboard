@@ -358,6 +358,28 @@ export const ShiftService = {
 
     const statusInfo = computeCaptainShiftStatus(schedule);
 
+    if (isFirebaseConfigured) {
+      try {
+        const captSnap = await getDoc(doc(db, COLLECTIONS.CAPTAINS, captainId));
+        if (captSnap.exists()) {
+          const captData = captSnap.data();
+          if (
+            captData.canReceiveOrders === false ||
+            captData.isReceivingOrders === false ||
+            captData.isBlocked === true
+          ) {
+            return {
+              isEligible: false,
+              statusInfo,
+              reason: 'تم إيقاف استقبال الطلبات لهذا الكابتن من قبل الإدارة.',
+            };
+          }
+        }
+      } catch {
+        // Proceed with schedule check if captain doc read fails
+      }
+    }
+
     if (statusInfo.status === 'unscheduled') {
       return {
         isEligible: false,

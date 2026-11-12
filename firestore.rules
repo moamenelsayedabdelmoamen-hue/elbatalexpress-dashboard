@@ -161,7 +161,7 @@ service cloud.firestore {
           resource.data.restaurantId == request.auth.token.restaurantId ||
           resource.data.captainId == request.auth.uid ||
           resource.data.captainId == request.auth.token.captainId ||
-          (resource.data.captainId == null && resource.data.status in ['ready', 'pending', 'available'])
+          (resource.data.captainId == null && resource.data.status in ['New', 'Ready', 'Pending', 'ready', 'pending', 'available', 'new'])
         ));
 
       // صلاحية الإنشاء (إرسال طلب توصيل جديد):

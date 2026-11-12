@@ -8,14 +8,13 @@ import {
   doc,
   getDoc,
   setLogLevel,
-  persistentLocalCache,
-  persistentMultipleTabManager,
+  memoryLocalCache,
 } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
-// Silence non-fatal WebChannel connection retry notices
-setLogLevel('error');
+// Silence internal @firebase/firestore connection retry / offline notices so they do not trigger console error monitors
+setLogLevel('silent');
 
 // Firebase configuration loaded from provisioned firebase-applet-config.json
 export const firebaseConfig = {
@@ -57,18 +56,13 @@ try {
           // ignore analytics initialization hiccups
         }
       }
-    });
+    }).catch(() => {});
   }
 
-  // Configure Firestore with long-polling and multi-tab local persistence
-  // experimentalForceLongPolling completely prevents duplex HTTP/2 WebChannel stream failures in sandboxed iframe/proxy environments.
+  // Configure Firestore with auto-detected long-polling and in-memory local cache
   const firestoreSettings = {
-    experimentalForceLongPolling: true,
-    localCache: typeof window !== 'undefined'
-      ? persistentLocalCache({
-          tabManager: persistentMultipleTabManager(),
-        })
-      : undefined,
+    experimentalAutoDetectLongPolling: true,
+    localCache: memoryLocalCache(),
   };
 
   try {
@@ -88,8 +82,8 @@ try {
   auth = null;
   try {
     db = firebaseConfig.firestoreDatabaseId
-      ? initializeFirestore(app, { experimentalForceLongPolling: true }, firebaseConfig.firestoreDatabaseId)
-      : initializeFirestore(app, { experimentalForceLongPolling: true });
+      ? initializeFirestore(app, { experimentalAutoDetectLongPolling: true }, firebaseConfig.firestoreDatabaseId)
+      : initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
   } catch {
     db = firebaseConfig.firestoreDatabaseId
       ? getFirestore(app, firebaseConfig.firestoreDatabaseId)

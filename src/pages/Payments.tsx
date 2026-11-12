@@ -39,7 +39,7 @@ export const PaymentsPage: React.FC = () => {
   // Form state
   const [formData, setFormData] = useState({
     restaurantName: '',
-    amount: 700,
+    amount: 400,
     paymentMethod: 'فودافون كاش (Vodafone Cash)',
     status: 'success' as 'success' | 'pending' | 'failed',
     notes: 'تجديد اشتراك شهري',
@@ -270,7 +270,7 @@ export const PaymentsPage: React.FC = () => {
               <thead>
                 <tr className="border-b border-zinc-800 text-xs font-bold text-zinc-400 bg-zinc-950/40">
                   <th className="py-4 px-4">رقم المعاملة</th>
-                  <th className="py-4 px-4">اسم المطعم</th>
+                  <th className="py-4 px-4">اسم التاجر</th>
                   <th className="py-4 px-4">المبلغ</th>
                   <th className="py-4 px-4">طريقة الدفع</th>
                   <th className="py-4 px-4">تاريخ الدفع</th>
@@ -471,7 +471,7 @@ export const PaymentsPage: React.FC = () => {
                   type="text"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="مثال: تجديد باقة 700 ج.م لشهر أكتوبر"
+                  placeholder="مثال: تجديد باقة 400 ج.م أو 800 ج.م"
                   className="w-full bg-[#0a0c12] border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500"
                 />
               </div>

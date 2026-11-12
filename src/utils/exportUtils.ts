@@ -77,7 +77,7 @@ export function exportOrders(orders: Order[], format: 'xlsx' | 'csv' = 'xlsx') {
   const data = orders.map((order, idx) => ({
     '#': idx + 1,
     'رقم الطلب': order.orderNumber || order.id || '-',
-    'اسم المطعم': order.restaurantName || '-',
+    'اسم التاجر': order.restaurantName || '-',
     'اسم العميل': order.customerName || '-',
     'هاتف العميل': order.customerPhone || '-',
     'عنوان التوصيل': order.deliveryAddress || '-',
@@ -86,11 +86,15 @@ export function exportOrders(orders: Order[], format: 'xlsx' | 'csv' = 'xlsx') {
     'تكلفة التوصيل (ج.م)': order.deliveryFee || 0,
     'الإجمالي الكلي (ج.م)': order.total || 0,
     'حالة الطلب': translateStatus(order.status),
-    'تاريخ الإنشاء': formatDate(order.createdAt),
+    'توقيت إنشاء الطلب': formatDate(order.createdAt),
+    'مدة البحث عن كابتن': order.captainSearchDuration || '-',
+    'وقت قبول الطلب من الكابتن': formatDate(order.acceptedAt),
+    'وقت وصول الكابتن للتاجر': formatDate(order.arrivedAtMerchantAt),
+    'وقت استلام الطلب من التاجر': formatDate(order.pickedUpAt),
+    'وقت تسليم الطلب للعميل': formatDate(order.deliveredAt),
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data);
-  // Auto column widths
   worksheet['!cols'] = [
     { wch: 6 },
     { wch: 16 },
@@ -102,6 +106,11 @@ export function exportOrders(orders: Order[], format: 'xlsx' | 'csv' = 'xlsx') {
     { wch: 16 },
     { wch: 18 },
     { wch: 18 },
+    { wch: 20 },
+    { wch: 22 },
+    { wch: 20 },
+    { wch: 22 },
+    { wch: 22 },
     { wch: 22 },
     { wch: 22 },
   ];
@@ -113,19 +122,19 @@ export function exportOrders(orders: Order[], format: 'xlsx' | 'csv' = 'xlsx') {
 }
 
 /**
- * 2. Export Restaurants to Excel / CSV
+ * 2. Export Restaurants / Merchants to Excel / CSV
  */
 export function exportRestaurants(restaurants: Restaurant[], format: 'xlsx' | 'csv' = 'xlsx') {
   const data = restaurants.map((r, idx) => ({
     '#': idx + 1,
-    'اسم المطعم': r.name || '-',
+    'اسم التجار': r.name || '-',
     'التصنيف': r.category || 'عام',
+    'البريد الإلكتروني': r.ownerEmail || '-',
     'رقم الهاتف': r.phone || '-',
     'العنوان': r.address || '-',
     'التقييم': r.rating || 5,
     'حالة الاشتراك': translateStatus(r.subscriptionStatus || 'Active'),
     'حالة النشاط': r.isActive ? 'مفعل' : 'معطل',
-    'البريد الإلكتروني': r.ownerEmail || '-',
     'تاريخ التسجيل': formatDate(r.createdAt),
   }));
 
@@ -134,19 +143,19 @@ export function exportRestaurants(restaurants: Restaurant[], format: 'xlsx' | 'c
     { wch: 6 },
     { wch: 24 },
     { wch: 16 },
+    { wch: 26 },
     { wch: 18 },
     { wch: 28 },
     { wch: 10 },
     { wch: 16 },
     { wch: 14 },
-    { wch: 26 },
     { wch: 22 },
   ];
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'المطاعم');
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'التجار');
   const dateStr = new Date().toISOString().slice(0, 10);
-  downloadWorkbook(workbook, `مطاعم_البطل_إكسبريس_${dateStr}`, format);
+  downloadWorkbook(workbook, `تجار_البطل_إكسبريس_${dateStr}`, format);
 }
 
 /**
@@ -157,11 +166,14 @@ export function exportCaptains(captains: Captain[], format: 'xlsx' | 'csv' = 'xl
     '#': idx + 1,
     'اسم الكابتن': c.name || '-',
     'رقم الهاتف': c.phone || '-',
+    'البريد الإلكتروني': c.email || '-',
     'نوع المركبة': c.vehicleType || 'دراجة نارية',
-    'الحالة الحالية': translateStatus(c.status),
     'عدد الطلبات المنجزة': c.ordersCount || 0,
     'التقييم': c.rating || 5,
-    'تاريخ الانضمام': formatDate(c.createdAt),
+    'تاريخ الحالة': formatDate(c.statusUpdatedAt || c.updatedAt || c.createdAt),
+    'كلمة السر': c.password || '-',
+    'استقبال الطلبات': c.canReceiveOrders !== false ? 'مفعل' : 'متوقف',
+    'الحالة الحالية': translateStatus(c.status),
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data);
@@ -169,11 +181,14 @@ export function exportCaptains(captains: Captain[], format: 'xlsx' | 'csv' = 'xl
     { wch: 6 },
     { wch: 22 },
     { wch: 18 },
+    { wch: 24 },
     { wch: 18 },
-    { wch: 16 },
     { wch: 18 },
     { wch: 10 },
     { wch: 22 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 16 },
   ];
 
   const workbook = XLSX.utils.book_new();
@@ -221,13 +236,13 @@ export function exportPayments(payments: Payment[], format: 'xlsx' | 'csv' = 'xl
 export function exportSubscriptions(subscriptions: Subscription[], format: 'xlsx' | 'csv' = 'xlsx') {
   const data = subscriptions.map((s, idx) => ({
     '#': idx + 1,
-    'اسم المطعم': s.restaurantName || '-',
-    'نوع الباقة': s.plan || '-',
-    'عدد الكباتن': s.captainsCount || 0,
+    'اسم التاجر المسجل': s.restaurantName || '-',
+    'الباقة': s.plan || '-',
+    'عدد الكباتن': s.captainsCount || 2,
     'قيمة الاشتراك (ج.م)': s.price || 0,
-    'تاريخ البدء': formatDate(s.startDate),
-    'تاريخ الانتهاء': formatDate(s.endDate),
     'حالة الاشتراك': translateStatus(s.status),
+    'ميعاد الاشتراك': formatDate(s.startDate),
+    'ميعاد انتهاء الاشتراك': formatDate(s.endDate),
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data);
@@ -237,9 +252,9 @@ export function exportSubscriptions(subscriptions: Subscription[], format: 'xlsx
     { wch: 22 },
     { wch: 14 },
     { wch: 18 },
-    { wch: 18 },
-    { wch: 18 },
     { wch: 16 },
+    { wch: 18 },
+    { wch: 18 },
   ];
 
   const workbook = XLSX.utils.book_new();

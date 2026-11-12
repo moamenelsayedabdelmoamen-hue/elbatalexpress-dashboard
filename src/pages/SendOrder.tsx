@@ -23,6 +23,7 @@ import { RestaurantService } from '../services/restaurantService';
 import { CaptainService } from '../services/captainService';
 import { OrderService } from '../services/orderService';
 import { ShiftService } from '../services/shiftService';
+import { NotificationService } from '../services/notificationService';
 import { ShiftStatusBadge } from '../components/shifts/ShiftStatusBadge';
 import { computeCaptainShiftStatus } from '../utils/shiftUtils';
 import { useToast } from '../contexts/ToastContext';
@@ -156,10 +157,25 @@ export const SendOrderPage: React.FC = () => {
       return;
     }
 
+    if (selectedCaptain.canReceiveOrders === false) {
+      const msg = `تم إيقاف استقبال الطلبات للكابتن "${selectedCaptain.name}" من قِبل الإدارة.`;
+      toastError(msg);
+      NotificationService.notifyCaptainAssignmentFailed({
+        restaurantName: selectedRestaurant.name,
+        reason: msg,
+      });
+      return;
+    }
+
     // Strict shift hours check: Do not allow assigning new orders outside active work hours
     const eligibility = await ShiftService.verifyCaptainOrderEligibility(selectedCaptain.id);
     if (!eligibility.isEligible) {
-      toastError(eligibility.reason || 'الكابتن المحدد خارج ساعات العمل المحددة له في الشفت، ولا يمكن إسناد طلبات جديدة إليه.');
+      const msg = eligibility.reason || 'الكابتن المحدد خارج ساعات العمل المحددة له في الشفت، ولا يمكن إسناد طلبات جديدة إليه.';
+      toastError(msg);
+      NotificationService.notifyCaptainAssignmentFailed({
+        restaurantName: selectedRestaurant.name,
+        reason: msg,
+      });
       return;
     }
 

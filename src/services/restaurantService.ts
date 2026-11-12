@@ -13,22 +13,65 @@ import {
 import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from '../firebase/config';
 import { COLLECTIONS } from './collections';
 import { Restaurant, SubscriptionStatus } from '../types';
+import { extractCoordinates } from '../utils/geoUtils';
 
 // Local cache for real data fetched from Firestore
 let localRestaurantsCache: Restaurant[] = [];
 
+function formatTimestamp(val: any): string {
+  if (!val) return new Date().toISOString();
+  if (typeof val?.toDate === 'function') {
+    return val.toDate().toISOString();
+  }
+  if (typeof val === 'object' && typeof val.seconds === 'number') {
+    return new Date(val.seconds * 1000).toISOString();
+  }
+  return String(val);
+}
+
 function mapDocToRestaurant(id: string, data: Record<string, any>): Restaurant {
+  const logo =
+    data.logo ||
+    data.logoUrl ||
+    data.logoURL ||
+    data.image ||
+    data.imageUrl ||
+    data.imageURL ||
+    data.photoURL ||
+    data.photoUrl ||
+    data.avatar ||
+    data.icon ||
+    data.merchantLogo ||
+    '';
+
+  const ownerEmail =
+    data.ownerEmail ||
+    data.email ||
+    data.merchantEmail ||
+    data.userEmail ||
+    data.contactEmail ||
+    '';
+
+  const coords = extractCoordinates(data);
+
   return {
     id,
-    name: data.name || data.nameAr || data.restaurantName || data.title || 'بدون اسم',
+    name: data.name || data.nameAr || data.merchantName || data.restaurantName || data.title || 'بدون اسم',
     category: data.category || data.cuisine || data.type || 'عام',
     phone: data.phone || data.phoneNumber || data.contact || '—',
     rating: typeof data.rating === 'number' ? data.rating : (typeof data.stars === 'number' ? data.stars : 5.0),
-    subscriptionStatus: (data.subscriptionStatus as SubscriptionStatus) || (data.subscription?.status as SubscriptionStatus) || 'Active',
+    subscriptionStatus:
+      (data.subscriptionStatus as SubscriptionStatus) ||
+      (data.subscription?.status as SubscriptionStatus) ||
+      'Active',
     isActive: typeof data.isActive === 'boolean' ? data.isActive : (data.status === 'active' || data.status === 'نشط'),
-    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
-    address: data.address || data.location || data.addressAr || '—',
-    ownerEmail: data.ownerEmail || data.email || '—',
+    createdAt: formatTimestamp(data.createdAt || data.registeredAt || data.updatedAt),
+    address: data.address || data.locationAddress || data.addressAr || (typeof data.location === 'string' ? data.location : '—'),
+    ownerEmail: ownerEmail || '—',
+    logo,
+    image: logo,
+    location: data.location || data.coordinates || data.coords,
+    coords,
     raw: data,
   };
 }
@@ -42,7 +85,7 @@ export const RestaurantService = {
     try {
       const q = query(collection(db, COLLECTIONS.RESTAURANTS), orderBy('name', 'asc'));
       const snapshot = await getDocs(q);
-      
+
       if (snapshot.empty) {
         localRestaurantsCache = [];
         return { data: [], isLive: true };
@@ -57,7 +100,6 @@ export const RestaurantService = {
       return { data: list, isLive: true };
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, COLLECTIONS.RESTAURANTS);
-      // Fallback gracefully to empty array or previously fetched data
       return { data: localRestaurantsCache, isLive: false };
     }
   },
@@ -82,8 +124,7 @@ export const RestaurantService = {
 
   async toggleActive(id: string, currentStatus: boolean): Promise<boolean> {
     const newStatus = !currentStatus;
-    
-    // Update local cache
+
     localRestaurantsCache = localRestaurantsCache.map((r) =>
       r.id === id ? { ...r, isActive: newStatus } : r
     );
@@ -111,14 +152,24 @@ export const RestaurantService = {
     if (isFirebaseConfigured) {
       try {
         const docRef = doc(db, COLLECTIONS.RESTAURANTS, id);
-        await updateDoc(docRef, {
-          ...(updates.name ? { name: updates.name } : {}),
-          ...(updates.category ? { category: updates.category } : {}),
-          ...(updates.phone ? { phone: updates.phone } : {}),
-          ...(updates.address ? { address: updates.address } : {}),
-          ...(updates.subscriptionStatus ? { subscriptionStatus: updates.subscriptionStatus } : {}),
+        const payload: Record<string, any> = {
           updatedAt: serverTimestamp(),
-        });
+        };
+        if (updates.name !== undefined) payload.name = updates.name;
+        if (updates.category !== undefined) payload.category = updates.category;
+        if (updates.phone !== undefined) payload.phone = updates.phone;
+        if (updates.address !== undefined) payload.address = updates.address;
+        if (updates.subscriptionStatus !== undefined) payload.subscriptionStatus = updates.subscriptionStatus;
+        if (updates.ownerEmail !== undefined) {
+          payload.ownerEmail = updates.ownerEmail;
+          payload.email = updates.ownerEmail;
+        }
+        if (updates.logo !== undefined) {
+          payload.logo = updates.logo;
+          payload.image = updates.logo;
+        }
+
+        await updateDoc(docRef, payload);
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, `${COLLECTIONS.RESTAURANTS}/${id}`);
       }
@@ -142,6 +193,10 @@ export const RestaurantService = {
           name: data.name,
           category: data.category || 'عام',
           phone: data.phone || '',
+          ownerEmail: data.ownerEmail || '',
+          email: data.ownerEmail || '',
+          logo: data.logo || '',
+          image: data.logo || '',
           rating: data.rating || 5.0,
           subscriptionStatus: data.subscriptionStatus || 'Active',
           isActive: data.isActive,

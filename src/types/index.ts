@@ -62,11 +62,18 @@ export interface Captain {
   id: string;
   name: string;
   phone: string;
+  email?: string;
+  password?: string;
+  profileImage?: string;
+  photoURL?: string;
   status: CaptainStatus;
   isOnline?: boolean;
+  canReceiveOrders?: boolean;
   ordersCount: number;
   rating: number;
   createdAt?: any;
+  updatedAt?: any;
+  statusUpdatedAt?: any;
   vehicleType?: string;
   location?: any; // GeoPoint or { lat, lng } or { latitude, longitude }
   coords?: { lat: number; lng: number } | null;
@@ -115,6 +122,14 @@ export interface Order {
   total: number;
   status: OrderStatus;
   createdAt?: any;
+  assignedAt?: any;
+  acceptedAt?: any;
+  arrivedAtMerchantAt?: any;
+  pickedUpAt?: any;
+  deliveredAt?: any;
+  captainSearchDuration?: string;
+  captainSearchSeconds?: number;
+  distanceToMerchantKm?: number;
   items?: OrderItem[];
   raw?: Record<string, any>;
 }
@@ -129,6 +144,9 @@ export interface Subscription {
   id: string;
   restaurantId: string;
   restaurantName: string;
+  merchantLogo?: string;
+  merchantPhone?: string;
+  merchantEmail?: string;
   plan: string;
   captainsCount?: number;
   price: number;
@@ -260,4 +278,24 @@ export interface CaptainSchedule {
   updatedBy?: string;
   raw?: Record<string, any>;
 }
+
+// -----------------------------------------------------------------------------
+// Firebase Cloud Messaging (FCM) & In-Dashboard Admin Notifications
+// -----------------------------------------------------------------------------
+export type AdminNotificationType = 'new_order' | 'captain_assignment_failed' | 'system';
+
+export interface AdminNotification {
+  id: string;
+  type: AdminNotificationType;
+  title: string;
+  body: string;
+  orderId?: string;
+  orderNumber?: string;
+  restaurantName?: string;
+  reason?: string;
+  isRead: boolean;
+  createdAt: string;
+  userId?: string;
+}
+
 

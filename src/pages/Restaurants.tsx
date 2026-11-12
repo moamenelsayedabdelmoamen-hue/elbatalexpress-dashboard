@@ -9,14 +9,15 @@ import {
   CheckCircle,
   XCircle,
   ShoppingBag,
-  Phone,
-  Calendar,
+  Mail,
   Eye,
   X,
   RefreshCw,
   Building2,
   Compass,
   Navigation,
+  Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Restaurant, SubscriptionStatus, Order } from '../types';
 import { RestaurantService } from '../services/restaurantService';
@@ -24,6 +25,8 @@ import { OrderService } from '../services/orderService';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { ConfirmationModal } from '../components/common/ConfirmationModal';
 import { EmptyState } from '../components/common/EmptyState';
+import { FirebaseImage } from '../components/common/FirebaseImage';
+import { uploadImageToFirebaseStorage } from '../utils/storageUtils';
 import { useToast } from '../contexts/ToastContext';
 import { ExportButton } from '../components/common/ExportButton';
 import { exportRestaurants } from '../utils/exportUtils';
@@ -45,13 +48,16 @@ export const RestaurantsPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   // Form states for Add / Edit
   const [formData, setFormData] = useState({
     name: '',
     category: '',
+    ownerEmail: '',
     phone: '',
     address: '',
+    logo: '',
     rating: 5.0,
     subscriptionStatus: 'Active' as SubscriptionStatus,
     isActive: true,
@@ -67,8 +73,8 @@ export const RestaurantsPage: React.FC = () => {
       setRestaurants(resRestaurants.data);
       setOrders(resOrders.data);
     } catch (err) {
-      console.error('Failed to load restaurants or orders:', err);
-      toastError('حدث خطأ أثناء تحميل المطاعم والطلبات');
+      console.error('Failed to load merchants or orders:', err);
+      toastError('حدث خطأ أثناء تحميل بيانات التجار والطلبات');
     } finally {
       setLoading(false);
     }
@@ -78,7 +84,7 @@ export const RestaurantsPage: React.FC = () => {
     fetchRestaurants();
   }, []);
 
-  // Map to count total real orders in the database for each restaurant
+  // Map to count total real orders in the database for each merchant
   const restaurantOrdersCount = useMemo(() => {
     const counts: Record<string, number> = {};
     orders.forEach((o) => {
@@ -96,9 +102,11 @@ export const RestaurantsPage: React.FC = () => {
 
   const filteredRestaurants = useMemo(() => {
     return restaurants.filter((r) => {
+      const q = searchQuery.toLowerCase();
       const matchesSearch =
-        r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (r.category && r.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        r.name.toLowerCase().includes(q) ||
+        (r.category && r.category.toLowerCase().includes(q)) ||
+        (r.ownerEmail && r.ownerEmail.toLowerCase().includes(q)) ||
         (r.phone && r.phone.includes(searchQuery));
 
       const matchesStatus =
@@ -117,15 +125,34 @@ export const RestaurantsPage: React.FC = () => {
     });
   }, [restaurants, searchQuery, statusFilter, subscriptionFilter]);
 
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>, merchantId?: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingLogo(true);
+    try {
+      const folderId = merchantId || `merchant_${Date.now()}`;
+      const ext = file.name.split('.').pop() || 'png';
+      const storagePath = `restaurants/${folderId}/logo_${Date.now()}.${ext}`;
+      const downloadUrl = await uploadImageToFirebaseStorage(file, storagePath);
+      setFormData((prev) => ({ ...prev, logo: downloadUrl }));
+      success('تم رفع صورة اللوجو للتاجر بنجاح');
+    } catch (err) {
+      toastError('فشل رفع صورة اللوجو');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   const handleToggleStatus = async (restaurant: Restaurant) => {
     try {
       const newStatus = await RestaurantService.toggleActive(restaurant.id, restaurant.isActive);
       setRestaurants((prev) =>
         prev.map((r) => (r.id === restaurant.id ? { ...r, isActive: newStatus } : r))
       );
-      success(newStatus ? `تم تفعيل مطعم "${restaurant.name}"` : `تم إيقاف مطعم "${restaurant.name}"`);
+      success(newStatus ? `تم تفعيل التاجر "${restaurant.name}"` : `تم إيقاف التاجر "${restaurant.name}"`);
     } catch (err) {
-      toastError('فشل تغيير حالة المطعم');
+      toastError('فشل تغيير حالة التاجر');
     }
   };
 
@@ -134,8 +161,10 @@ export const RestaurantsPage: React.FC = () => {
     setFormData({
       name: restaurant.name,
       category: restaurant.category || '',
-      phone: restaurant.phone || '',
-      address: restaurant.address || '',
+      ownerEmail: restaurant.ownerEmail && restaurant.ownerEmail !== '—' ? restaurant.ownerEmail : '',
+      phone: restaurant.phone && restaurant.phone !== '—' ? restaurant.phone : '',
+      address: restaurant.address && restaurant.address !== '—' ? restaurant.address : '',
+      logo: restaurant.logo || restaurant.image || '',
       rating: restaurant.rating || 5.0,
       subscriptionStatus: restaurant.subscriptionStatus || 'Active',
       isActive: restaurant.isActive,
@@ -151,23 +180,29 @@ export const RestaurantsPage: React.FC = () => {
       await RestaurantService.update(editingRestaurant.id, {
         name: formData.name,
         category: formData.category,
+        ownerEmail: formData.ownerEmail || '—',
         phone: formData.phone,
         address: formData.address,
+        logo: formData.logo,
         subscriptionStatus: formData.subscriptionStatus,
       });
 
       setRestaurants((prev) =>
         prev.map((r) =>
           r.id === editingRestaurant.id
-            ? { ...r, ...formData }
+            ? {
+                ...r,
+                ...formData,
+                ownerEmail: formData.ownerEmail || '—',
+              }
             : r
         )
       );
 
-      success('تم تحديث بيانات المطعم بنجاح');
+      success('تم تحديث بيانات التاجر بنجاح');
       setEditingRestaurant(null);
     } catch (err) {
-      toastError('فشل حفظ تعديلات المطعم');
+      toastError('فشل حفظ تعديلات التاجر');
     } finally {
       setActionLoading(false);
     }
@@ -176,7 +211,7 @@ export const RestaurantsPage: React.FC = () => {
   const handleAddRestaurant = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      toastError('يرجى إدخال اسم المطعم');
+      toastError('يرجى إدخال اسم التاجر');
       return;
     }
 
@@ -185,27 +220,31 @@ export const RestaurantsPage: React.FC = () => {
       const newRest = await RestaurantService.create({
         name: formData.name,
         category: formData.category || 'عام',
+        ownerEmail: formData.ownerEmail || '—',
         phone: formData.phone || '',
         address: formData.address || '',
+        logo: formData.logo || '',
         rating: 5.0,
         subscriptionStatus: formData.subscriptionStatus,
         isActive: formData.isActive,
       });
 
       setRestaurants((prev) => [newRest, ...prev]);
-      success('تم تسجيل المطعم الجديد بنجاح');
+      success('تم تسجيل التاجر الجديد بنجاح');
       setIsAddModalOpen(false);
       setFormData({
         name: '',
         category: '',
+        ownerEmail: '',
         phone: '',
         address: '',
+        logo: '',
         rating: 5.0,
         subscriptionStatus: 'Active',
         isActive: true,
       });
     } catch (err) {
-      toastError('فشل إضافة المطعم');
+      toastError('فشل إضافة التاجر');
     } finally {
       setActionLoading(false);
     }
@@ -217,10 +256,10 @@ export const RestaurantsPage: React.FC = () => {
     try {
       await RestaurantService.delete(deletingId);
       setRestaurants((prev) => prev.filter((r) => r.id !== deletingId));
-      success('تم حذف المطعم بنجاح');
+      success('تم حذف التاجر بنجاح');
       setDeletingId(null);
     } catch (err) {
-      toastError('فشل حذف المطعم');
+      toastError('فشل حذف التاجر');
     } finally {
       setActionLoading(false);
     }
@@ -231,9 +270,9 @@ export const RestaurantsPage: React.FC = () => {
       {/* Top Header Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-black text-white">إدارة المطاعم المسجلة</h2>
+          <h2 className="text-xl sm:text-2xl font-black text-white">إدارة التجار</h2>
           <p className="text-xs sm:text-sm text-zinc-400 mt-0.5">
-            متابعة شركاء El Batal Express وتعديل بياناتهم وتفعيل الخدمات
+            متابعة التجار وشركاء El Batal Express وتعديل بياناتهم وتفعيل الخدمات
           </p>
         </div>
 
@@ -241,7 +280,7 @@ export const RestaurantsPage: React.FC = () => {
           <ExportButton
             onExportExcel={() => exportRestaurants(filteredRestaurants, 'xlsx')}
             onExportCsv={() => exportRestaurants(filteredRestaurants, 'csv')}
-            label="تصدير المطاعم"
+            label="تصدير التجار"
             count={filteredRestaurants.length}
           />
 
@@ -257,8 +296,10 @@ export const RestaurantsPage: React.FC = () => {
               setFormData({
                 name: '',
                 category: '',
+                ownerEmail: '',
                 phone: '',
                 address: '',
+                logo: '',
                 rating: 5.0,
                 subscriptionStatus: 'Active',
                 isActive: true,
@@ -268,7 +309,7 @@ export const RestaurantsPage: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs sm:text-sm shadow-md shadow-amber-500/10 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            <span>إضافة مطعم جديد</span>
+            <span>إضافة تاجر جديد</span>
           </button>
         </div>
       </div>
@@ -281,7 +322,7 @@ export const RestaurantsPage: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="البحث بالاسم أو التصنيف أو الهاتف..."
+            placeholder="البحث باسم التاجر أو التصنيف أو البريد الإلكتروني أو الهاتف..."
             className="w-full bg-[#0a0c12] border border-zinc-800 text-zinc-100 placeholder-zinc-500 rounded-xl py-2.5 pr-10 pl-4 text-xs sm:text-sm focus:outline-none focus:border-amber-500 transition-colors"
           />
         </div>
@@ -330,17 +371,17 @@ export const RestaurantsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Restaurants Table */}
+      {/* Merchants Table */}
       <div className="bg-[#11141c] border border-zinc-800/90 rounded-3xl shadow-xl overflow-hidden">
         {loading ? (
           <div className="p-12 text-center">
             <div className="w-8 h-8 border-3 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-zinc-400 text-xs font-semibold">جاري جلب المطاعم من Firestore...</p>
+            <p className="text-zinc-400 text-xs font-semibold">جاري جلب بيانات التجار من Firestore...</p>
           </div>
         ) : filteredRestaurants.length === 0 ? (
           <div className="p-8">
             <EmptyState
-              title="لم يتم العثور على مطاعم"
+              title="لم يتم العثور على تجار"
               description="لا توجد نتائج تطابق معايير البحث أو التصفية الحالية."
               icon={UtensilsCrossed}
               actionText="إعادة ضبط البحث"
@@ -356,8 +397,10 @@ export const RestaurantsPage: React.FC = () => {
             <table className="w-full text-right border-collapse text-sm">
               <thead>
                 <tr className="border-b border-zinc-800 text-xs font-bold text-zinc-400 bg-zinc-950/40">
-                  <th className="py-4 px-4">اسم المطعم</th>
+                  <th className="py-4 px-4">اسم التجار</th>
+                  <th className="py-4 px-4">صورة اللوجو للتاجر</th>
                   <th className="py-4 px-4">التصنيف</th>
+                  <th className="py-4 px-4">البريد الإلكتروني</th>
                   <th className="py-4 px-4">رقم الهاتف</th>
                   <th className="py-4 px-4">الطلبات</th>
                   <th className="py-4 px-4">حالة الاشتراك</th>
@@ -374,106 +417,148 @@ export const RestaurantsPage: React.FC = () => {
                     restaurantOrdersCount[restaurant.id] ??
                     0;
 
+                  const storageFallbacks = [
+                    `restaurants/${restaurant.id}`,
+                    `merchants/${restaurant.id}`,
+                    `logos/${restaurant.id}`,
+                    `users/${restaurant.id}`,
+                  ];
+
                   return (
                     <tr key={restaurant.id} className="hover:bg-zinc-900/40 transition-colors">
+                      {/* اسم التجار */}
                       <td className="py-4 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm shrink-0">
-                            {restaurant.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-extrabold text-zinc-100 text-sm">{restaurant.name}</p>
-                            {restaurant.address && (
-                              <p className="text-xs text-zinc-500 truncate max-w-xs">{restaurant.address}</p>
-                            )}
-                          </div>
+                        <div className="flex flex-col gap-1">
+                          <p className="font-extrabold text-zinc-100 text-sm">{restaurant.name}</p>
+                          {restaurant.address && restaurant.address !== '—' && (
+                            <p className="text-xs text-zinc-500 truncate max-w-xs">{restaurant.address}</p>
+                          )}
                         </div>
                       </td>
 
-                      <td className="py-4 px-4 text-xs font-semibold text-zinc-300">
-                        {restaurant.category || 'عام'}
+                      {/* صورة اللوجو للتاجر */}
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-2">
+                          <FirebaseImage
+                            src={restaurant.logo || restaurant.image}
+                            fallbackStoragePaths={storageFallbacks}
+                            alt={`لوجو ${restaurant.name}`}
+                            className="w-11 h-11 rounded-2xl border border-amber-500/30 shadow-xs"
+                            onClick={() => setViewingRestaurant(restaurant)}
+                            fallbackContent={
+                              <div className="w-full h-full bg-amber-500/10 text-amber-400 flex items-center justify-center font-black text-sm">
+                                {restaurant.name.charAt(0)}
+                              </div>
+                            }
+                          />
+                        </div>
                       </td>
 
-                      <td className="py-4 px-4 text-xs font-mono text-zinc-300">
+                      {/* التصنيف */}
+                      <td className="py-4 px-4 text-xs font-semibold text-zinc-300">
+                        <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800">
+                          {restaurant.category || 'عام'}
+                        </span>
+                      </td>
+
+                      {/* البريد الإلكتروني */}
+                      <td className="py-4 px-4 text-xs font-mono text-zinc-300" dir="ltr">
+                        {restaurant.ownerEmail && restaurant.ownerEmail !== '—' ? (
+                          <div className="inline-flex items-center gap-1.5 text-zinc-200">
+                            <Mail className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span className="truncate max-w-[180px]">{restaurant.ownerEmail}</span>
+                          </div>
+                        ) : (
+                          <span className="text-zinc-500">—</span>
+                        )}
+                      </td>
+
+                      {/* رقم الهاتف */}
+                      <td className="py-4 px-4 text-xs font-mono text-zinc-300" dir="ltr">
                         {restaurant.phone || '—'}
                       </td>
 
+                      {/* الطلبات */}
                       <td className="py-4 px-4">
                         <button
                           onClick={() => navigate(`/orders?restaurant=${encodeURIComponent(restaurant.name)}`)}
                           className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/60 text-amber-400 text-xs font-bold transition-all hover:scale-105 cursor-pointer shadow-xs"
-                          title={`عرض جميع طلبات مطعم ${restaurant.name}`}
+                          title={`عرض جميع طلبات التاجر ${restaurant.name}`}
                         >
                           <ShoppingBag className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
                           <span>{ordersCount} طلب</span>
                         </button>
                       </td>
 
+                      {/* حالة الاشتراك */}
                       <td className="py-4 px-4">
                         <StatusBadge status={restaurant.subscriptionStatus || 'Active'} type="subscription" />
                       </td>
 
+                      {/* الحالة */}
                       <td className="py-4 px-4">
                         <StatusBadge status={restaurant.isActive} type="restaurant" />
                       </td>
 
-                    <td className="py-4 px-4 text-xs text-zinc-500">
-                      {restaurant.createdAt
-                        ? new Date(restaurant.createdAt).toLocaleDateString('ar-EG', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })
-                        : '—'}
-                    </td>
+                      {/* تاريخ التسجيل */}
+                      <td className="py-4 px-4 text-xs text-zinc-400">
+                        {restaurant.createdAt
+                          ? new Date(restaurant.createdAt).toLocaleDateString('ar-EG', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : '—'}
+                      </td>
 
-                    <td className="py-4 px-4 text-left">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => setViewingRestaurant(restaurant)}
-                          className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 rounded-lg transition-colors"
-                          title="عرض التفاصيل"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                      {/* الإجراءات */}
+                      <td className="py-4 px-4 text-left">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setViewingRestaurant(restaurant)}
+                            className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 rounded-lg transition-colors"
+                            title="عرض التفاصيل"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
 
-                        <button
-                          onClick={() => handleToggleStatus(restaurant)}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            restaurant.isActive
-                              ? 'text-rose-400 hover:bg-rose-500/10'
-                              : 'text-emerald-400 hover:bg-emerald-500/10'
-                          }`}
-                          title={restaurant.isActive ? 'إيقاف المطعم' : 'تفعيل المطعم'}
-                        >
-                          {restaurant.isActive ? (
-                            <XCircle className="w-4 h-4" />
-                          ) : (
-                            <CheckCircle className="w-4 h-4" />
-                          )}
-                        </button>
+                          <button
+                            onClick={() => handleToggleStatus(restaurant)}
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              restaurant.isActive
+                                ? 'text-rose-400 hover:bg-rose-500/10'
+                                : 'text-emerald-400 hover:bg-emerald-500/10'
+                            }`}
+                            title={restaurant.isActive ? 'إيقاف التاجر' : 'تفعيل التاجر'}
+                          >
+                            {restaurant.isActive ? (
+                              <XCircle className="w-4 h-4" />
+                            ) : (
+                              <CheckCircle className="w-4 h-4" />
+                            )}
+                          </button>
 
-                        <button
-                          onClick={() => handleOpenEdit(restaurant)}
-                          className="p-1.5 text-zinc-400 hover:text-amber-400 hover:bg-zinc-800/80 rounded-lg transition-colors"
-                          title="تعديل البيانات"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
+                          <button
+                            onClick={() => handleOpenEdit(restaurant)}
+                            className="p-1.5 text-zinc-400 hover:text-amber-400 hover:bg-zinc-800/80 rounded-lg transition-colors"
+                            title="تعديل بيانات التاجر"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
 
-                        <button
-                          onClick={() => setDeletingId(restaurant.id)}
-                          className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-zinc-800/80 rounded-lg transition-colors"
-                          title="حذف المطعم"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
+                          <button
+                            onClick={() => setDeletingId(restaurant.id)}
+                            className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-zinc-800/80 rounded-lg transition-colors"
+                            title="حذف التاجر"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </table>
           </div>
         )}
@@ -482,7 +567,7 @@ export const RestaurantsPage: React.FC = () => {
       {/* View Details Modal */}
       {viewingRestaurant && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-          <div className="w-full max-w-lg bg-[#11141c] border border-zinc-800 rounded-3xl p-6 shadow-2xl relative">
+          <div className="w-full max-w-lg bg-[#11141c] border border-zinc-800 rounded-3xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setViewingRestaurant(null)}
               className="absolute top-5 left-5 text-zinc-400 hover:text-white p-1 rounded-lg"
@@ -490,13 +575,25 @@ export const RestaurantsPage: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg">
-                <Building2 className="w-6 h-6" />
-              </div>
+            <div className="flex items-center gap-4 mb-6">
+              <FirebaseImage
+                src={viewingRestaurant.logo || viewingRestaurant.image}
+                fallbackStoragePaths={[
+                  `restaurants/${viewingRestaurant.id}`,
+                  `merchants/${viewingRestaurant.id}`,
+                  `logos/${viewingRestaurant.id}`,
+                ]}
+                alt={viewingRestaurant.name}
+                className="w-16 h-16 rounded-2xl border border-amber-500/30"
+                fallbackContent={
+                  <div className="w-full h-full bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-lg">
+                    <Building2 className="w-7 h-7" />
+                  </div>
+                }
+              />
               <div>
                 <h3 className="text-lg font-black text-white">{viewingRestaurant.name}</h3>
-                <p className="text-xs text-zinc-400">معرف المطعم: {viewingRestaurant.id}</p>
+                <p className="text-xs text-zinc-400">معرف التاجر: {viewingRestaurant.id}</p>
               </div>
             </div>
 
@@ -507,7 +604,15 @@ export const RestaurantsPage: React.FC = () => {
               </div>
               <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800">
                 <span className="text-zinc-500 block mb-1">رقم الهاتف</span>
-                <span className="font-bold text-zinc-200 font-mono">{viewingRestaurant.phone || '—'}</span>
+                <span className="font-bold text-zinc-200 font-mono" dir="ltr">
+                  {viewingRestaurant.phone || '—'}
+                </span>
+              </div>
+              <div className="col-span-2 p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800">
+                <span className="text-zinc-500 block mb-1">البريد الإلكتروني للتاجر</span>
+                <span className="font-bold text-zinc-200 font-mono" dir="ltr">
+                  {viewingRestaurant.ownerEmail || '—'}
+                </span>
               </div>
               <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800">
                 <span className="text-zinc-500 block mb-1">الحالة</span>
@@ -530,7 +635,7 @@ export const RestaurantsPage: React.FC = () => {
                   <ShoppingBag className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-xs text-zinc-400 block">إجمالي طلبات المطعم</span>
+                  <span className="text-xs text-zinc-400 block">إجمالي طلبات التاجر</span>
                   <span className="text-sm font-black text-amber-400 font-['Outfit',sans-serif]">
                     {(restaurantOrdersCount[viewingRestaurant.name] ??
                       restaurantOrdersCount[viewingRestaurant.name.trim().toLowerCase()] ??
@@ -560,7 +665,7 @@ export const RestaurantsPage: React.FC = () => {
                 <div>
                   <span className="text-xs text-zinc-400 block">الخريطة المباشرة وتحديد الكباتن</span>
                   <span className="text-xs font-bold text-emerald-300">
-                    تتبع موقع المطعم والبحث عن أقرب كابتن متاح
+                    تتبع موقع التاجر والبحث عن أقرب كابتن متاح
                   </span>
                 </div>
               </div>
@@ -576,7 +681,6 @@ export const RestaurantsPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Raw data inspection to ensure zero data loss with existing schema */}
             {viewingRestaurant.raw && Object.keys(viewingRestaurant.raw).length > 0 && (
               <div className="mt-4 pt-4 border-t border-zinc-800/80">
                 <details className="text-[11px] text-zinc-400">
@@ -593,10 +697,10 @@ export const RestaurantsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Edit Restaurant Modal */}
+      {/* Edit Merchant Modal */}
       {editingRestaurant && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-[#11141c] border border-zinc-800 rounded-3xl p-6 shadow-2xl relative">
+          <div className="w-full max-w-md bg-[#11141c] border border-zinc-800 rounded-3xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setEditingRestaurant(null)}
               className="absolute top-5 left-5 text-zinc-400 hover:text-white p-1 rounded-lg"
@@ -604,11 +708,11 @@ export const RestaurantsPage: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-lg font-black text-white mb-4">تعديل بيانات المطعم</h3>
+            <h3 className="text-lg font-black text-white mb-4">تعديل بيانات التاجر</h3>
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-zinc-300 mb-1.5">اسم المطعم</label>
+                <label className="block font-bold text-zinc-300 mb-1.5">اسم التاجر *</label>
                 <input
                   type="text"
                   value={formData.name}
@@ -618,13 +722,61 @@ export const RestaurantsPage: React.FC = () => {
                 />
               </div>
 
+              {/* Merchant Logo Upload / URL */}
               <div>
-                <label className="block font-bold text-zinc-300 mb-1.5">التصنيف / نوع الطعام</label>
+                <label className="block font-bold text-zinc-300 mb-1.5">صورة اللوجو للتاجر</label>
+                <div className="flex items-center gap-3 mb-2">
+                  <FirebaseImage
+                    src={formData.logo}
+                    alt="لوجو التاجر"
+                    className="w-12 h-12 rounded-2xl border border-zinc-700"
+                    fallbackContent={
+                      <div className="w-full h-full bg-zinc-900 text-zinc-500 flex items-center justify-center">
+                        <ImageIcon className="w-5 h-5" />
+                      </div>
+                    }
+                  />
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 font-bold transition-colors">
+                    <Upload className="w-4 h-4 text-amber-400" />
+                    <span>{uploadingLogo ? 'جاري رفع اللوجو...' : 'رفع لوجو من الجهاز (Storage)'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleLogoFileChange(e, editingRestaurant.id)}
+                      className="hidden"
+                      disabled={uploadingLogo}
+                    />
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  value={formData.logo}
+                  onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
+                  dir="ltr"
+                  placeholder="أو ضع رابط مباشر للصورة أو مسار Firebase Storage..."
+                  className="w-full bg-[#0a0c12] border border-zinc-800 rounded-xl px-3.5 py-2 text-zinc-100 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-zinc-300 mb-1.5">التصنيف</label>
                 <input
                   type="text"
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  placeholder="مثال: مأكولات شرقية، برجر، بيتزا"
+                  placeholder="مثال: مأكولات شرقية، برجر، بيتزا، سوبر ماركت"
+                  className="w-full bg-[#0a0c12] border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-zinc-300 mb-1.5">البريد الإلكتروني</label>
+                <input
+                  type="email"
+                  value={formData.ownerEmail}
+                  onChange={(e) => setFormData({ ...formData, ownerEmail: e.target.value })}
+                  dir="ltr"
+                  placeholder="merchant@example.com"
                   className="w-full bg-[#0a0c12] border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -654,7 +806,9 @@ export const RestaurantsPage: React.FC = () => {
                 <label className="block font-bold text-zinc-300 mb-1.5">حالة الاشتراك</label>
                 <select
                   value={formData.subscriptionStatus}
-                  onChange={(e) => setFormData({ ...formData, subscriptionStatus: e.target.value as SubscriptionStatus })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, subscriptionStatus: e.target.value as SubscriptionStatus })
+                  }
                   className="w-full bg-[#0a0c12] border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500"
                 >
                   <option value="Active">ساري (Active)</option>
@@ -674,7 +828,7 @@ export const RestaurantsPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading}
+                  disabled={actionLoading || uploadingLogo}
                   className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold transition-colors disabled:opacity-50"
                 >
                   {actionLoading ? 'جاري الحفظ...' : 'حفظ التعديلات'}
@@ -685,10 +839,10 @@ export const RestaurantsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Add New Restaurant Modal */}
+      {/* Add New Merchant Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-[#11141c] border border-zinc-800 rounded-3xl p-6 shadow-2xl relative">
+          <div className="w-full max-w-md bg-[#11141c] border border-zinc-800 rounded-3xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsAddModalOpen(false)}
               className="absolute top-5 left-5 text-zinc-400 hover:text-white p-1 rounded-lg"
@@ -696,18 +850,53 @@ export const RestaurantsPage: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-lg font-black text-white mb-4">تسجيل مطعم جديد في المنظومة</h3>
+            <h3 className="text-lg font-black text-white mb-4">تسجيل تاجر جديد في المنظومة</h3>
 
             <form onSubmit={handleAddRestaurant} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-zinc-300 mb-1.5">اسم المطعم *</label>
+                <label className="block font-bold text-zinc-300 mb-1.5">اسم التاجر *</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="مثال: مطعم النجم الذهبي"
+                  placeholder="مثال: النجم الذهبي"
                   className="w-full bg-[#0a0c12] border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500"
                   required
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-zinc-300 mb-1.5">صورة اللوجو للتاجر</label>
+                <div className="flex items-center gap-3 mb-2">
+                  <FirebaseImage
+                    src={formData.logo}
+                    alt="لوجو التاجر"
+                    className="w-12 h-12 rounded-2xl border border-zinc-700"
+                    fallbackContent={
+                      <div className="w-full h-full bg-zinc-900 text-zinc-500 flex items-center justify-center">
+                        <ImageIcon className="w-5 h-5" />
+                      </div>
+                    }
+                  />
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 font-bold transition-colors">
+                    <Upload className="w-4 h-4 text-amber-400" />
+                    <span>{uploadingLogo ? 'جاري الرفع...' : 'رفع صورة اللوجو'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleLogoFileChange(e)}
+                      className="hidden"
+                      disabled={uploadingLogo}
+                    />
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  value={formData.logo}
+                  onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
+                  dir="ltr"
+                  placeholder="أو رابط اللوجو المباشر..."
+                  className="w-full bg-[#0a0c12] border border-zinc-800 rounded-xl px-3.5 py-2 text-zinc-100 focus:outline-none focus:border-amber-500"
                 />
               </div>
 
@@ -717,7 +906,19 @@ export const RestaurantsPage: React.FC = () => {
                   type="text"
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  placeholder="وجبات سريعة، مشويات، أسماك..."
+                  placeholder="وجبات سريعة، مشويات، سوبر ماركت..."
+                  className="w-full bg-[#0a0c12] border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-zinc-300 mb-1.5">البريد الإلكتروني</label>
+                <input
+                  type="email"
+                  value={formData.ownerEmail}
+                  onChange={(e) => setFormData({ ...formData, ownerEmail: e.target.value })}
+                  dir="ltr"
+                  placeholder="merchant@example.com"
                   className="w-full bg-[#0a0c12] border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -755,10 +956,10 @@ export const RestaurantsPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading}
+                  disabled={actionLoading || uploadingLogo}
                   className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold transition-colors disabled:opacity-50"
                 >
-                  {actionLoading ? 'جاري الإضافة...' : 'تسجيل المطعم'}
+                  {actionLoading ? 'جاري الإضافة...' : 'تسجيل التاجر'}
                 </button>
               </div>
             </form>
@@ -769,8 +970,8 @@ export const RestaurantsPage: React.FC = () => {
       {/* Delete Confirmation Modal */}
       <ConfirmationModal
         isOpen={Boolean(deletingId)}
-        title="تأكيد حذف المطعم"
-        message="هل أنت متأكد من رغبتك في حذف هذا المطعم من النظام؟ لا يمكن التراجع عن هذه الخطوة."
+        title="تأكيد حذف التاجر"
+        message="هل أنت متأكد من رغبتك في حذف هذا التاجر من النظام؟ لا يمكن التراجع عن هذه الخطوة."
         confirmText="حذف نهائي"
         cancelText="تراجع"
         isDanger={true}

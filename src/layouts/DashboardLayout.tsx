@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from '../components/common/Sidebar';
 import { Header } from '../components/common/Header';
+import { InDashboardAlertBanner } from '../components/common/NotificationCenter';
 
 export const DashboardLayout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -11,7 +12,7 @@ export const DashboardLayout: React.FC = () => {
     if (pathname.includes('/live-map')) return 'الخريطة المباشرة والمواقع الحية';
     if (pathname.includes('/send-order')) return 'إرسال طلب إلى كابتن التوصيل';
     if (pathname.includes('/shifts')) return 'إدارة شفتات وساعات عمل الكباتن';
-    if (pathname.includes('/restaurants')) return 'إدارة المطاعم';
+    if (pathname.includes('/restaurants')) return 'إدارة التجار';
     if (pathname.includes('/captains')) return 'إدارة الكباتن';
     if (pathname.includes('/orders')) return 'إدارة الطلبات';
     if (pathname.includes('/subscriptions')) return 'إدارة الاشتراكات';
@@ -34,6 +35,9 @@ export const DashboardLayout: React.FC = () => {
           title={getPageTitle(location.pathname)}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
         />
+
+        {/* Real-Time In-Dashboard Alert Banner for New Orders & Captain Assignment Failures */}
+        <InDashboardAlertBanner />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           <Outlet />

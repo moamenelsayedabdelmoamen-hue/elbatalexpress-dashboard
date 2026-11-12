@@ -35,7 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { to: '/live-map', label: 'الخريطة المباشرة', icon: Compass },
     { to: '/send-order', label: 'إرسال طلب لكابتن', icon: Send },
     { to: '/shifts', label: 'إدارة شفتات العمل', icon: CalendarClock },
-    { to: '/restaurants', label: 'المطاعم', icon: UtensilsCrossed },
+    { to: '/restaurants', label: 'التجار', icon: UtensilsCrossed },
     { to: '/captains', label: 'الكباتن', icon: Bike },
     { to: '/orders', label: 'الطلبات', icon: ShoppingBag },
     { to: '/subscriptions', label: 'الاشتراكات', icon: CreditCard },
