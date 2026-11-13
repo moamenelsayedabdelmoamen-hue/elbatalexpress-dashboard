@@ -75,9 +75,8 @@ service cloud.firestore {
     // المسؤول الكامل (moamen.elsayed.abdelmoamen@gmail.com) فقط من يضيف ويحذف المسؤولين
     // -------------------------------------------------------------------------
     match /admins/{adminId} {
-      allow read: if isSignedIn();
-      allow create, delete: if isMasterAdmin();
-      allow update: if isMasterAdmin() || (isSignedIn() && request.auth.uid == adminId);
+      allow read: if isAdmin();
+      allow create, update, delete: if isMasterAdmin();
     }
 
     // -------------------------------------------------------------------------
@@ -214,8 +213,7 @@ service cloud.firestore {
       allow write: if isAdmin();
 
       match /{subcollection=**} {
-        allow read: if isAdmin() || isSignedIn();
-        allow write: if isAdmin();
+        allow read, write: if isAdmin();
       }
     }
 
@@ -264,7 +262,7 @@ service cloud.firestore {
         resource.data.userId == request.auth.uid ||
         isAdmin()
       );
-      allow create: if isSignedIn();
+      allow create: if isAdmin() || (isSignedIn() && request.resource.data.userId == request.auth.uid);
       allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
