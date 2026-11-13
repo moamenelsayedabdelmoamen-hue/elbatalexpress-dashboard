@@ -1,21 +1,29 @@
 # Security Policy
 
-## Supported Versions
+## Reporting a vulnerability
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Do not report security vulnerabilities in public issues or discussions.
+Report them privately through GitHub's **Report a vulnerability** feature
+(Security tab) for this repository.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+Include:
+- A concise description and affected commit or version.
+- Reproduction steps using a local/test environment and synthetic data.
+- Potential impact and any suggested mitigation.
 
-## Reporting a Vulnerability
+Do not include real customer data, credentials, access tokens, payment data,
+or production secrets in a report.
 
-Use this section to tell people how to report a vulnerability.
+## Response
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+The maintainers will acknowledge a report as soon as reasonably possible,
+investigate it privately, and coordinate a fix and disclosure with the reporter.
+
+## Security expectations
+
+- Never commit credentials, private keys, service-account JSON, or production
+  environment files.
+- Validate authorization on the server; client-side role checks are not a
+  security boundary.
+- Test Firestore and Storage rules with the Firebase Emulator before deployment.
+- Do not deploy security-rule or payment changes to production without review.
