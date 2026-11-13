@@ -67,7 +67,7 @@ service cloud.firestore {
     // فحص الاتصال واختبار السيرفر
     // -------------------------------------------------------------------------
     match /test/{testId} {
-      allow read, write: if true;
+      allow read, write: if false; // Test endpoint disabled; never expose test data publicly.
     }
 
     // -------------------------------------------------------------------------
@@ -84,7 +84,7 @@ service cloud.firestore {
     // 2. سجلات المستخدمين والحسابات العامة (users)
     // -------------------------------------------------------------------------
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
       allow create: if isSignedIn() && request.auth.uid == userId;
       allow update: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
       allow delete: if isAdmin();
@@ -97,7 +97,7 @@ service cloud.firestore {
       // القراءة:
       // - لوحة التحكم وصاحب المطعم
       // - الكباتن المسجلين لقراءة عنوان المطعم ورقم الهاتف لاستلام الطلبات
-      allow read: if isAdmin() || isRestaurant(restaurantId) || isSignedIn();
+      allow read: if isAdmin() || isRestaurant(restaurantId);
 
       // الإضافة والحذف: محصورة بالمدير عبر لوحة التحكم فقط
       allow create, delete: if isAdmin();
@@ -125,7 +125,7 @@ service cloud.firestore {
       // القراءة:
       // - لوحة التحكم والكابتن نفسه
       // - المطاعم لقراءة بيانات الكابتن الذي يوصل طلباتها
-      allow read: if isAdmin() || isCaptain(captainId) || isSignedIn();
+      allow read: if isAdmin() || isCaptain(captainId);
 
       // التسجيل المبدئي: الكابتن يمكنه تسجيل حسابه، والاعتماد أو الحذف للأدمن
       allow create: if isAdmin() || (isSignedIn() && request.auth.uid == captainId);
@@ -195,7 +195,7 @@ service cloud.firestore {
 
       // سجلات الحالات وتفاصيل التتبع
       match /{subcollection=**} {
-        allow read, write: if isAdmin() || isSignedIn();
+        allow read, write: if isAdmin() || isRestaurant(get(/databases/$(database)/documents/orders/$(orderId)).data.restaurantId) || isCaptain(get(/databases/$(database)/documents/orders/$(orderId)).data.captainId);
       }
     }
 
@@ -273,10 +273,10 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
     match /captain_schedules/{captainId} {
       // القراءة والكتابة: متاحة لمتابعة الشفتات، لوحة التحكم، وتطبيق الكباتن
-      allow read, write: if true;
+      allow read, write: if false; // Test endpoint disabled; never expose test data publicly.
 
       match /{subcollection=**} {
-        allow read, write: if true;
+        allow read, write: if false; // Test endpoint disabled; never expose test data publicly.
       }
     }
 
