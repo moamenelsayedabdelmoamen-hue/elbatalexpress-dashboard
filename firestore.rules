@@ -272,11 +272,11 @@ service cloud.firestore {
     // 10. جداول وشفتات عمل الكباتن (captain_schedules)
     // -------------------------------------------------------------------------
     match /captain_schedules/{captainId} {
-      // القراءة والكتابة: متاحة لمتابعة الشفتات، لوحة التحكم، وتطبيق الكباتن
-      allow read, write: if false; // Test endpoint disabled; never expose test data publicly.
+      // Only the assigned captain and administrators may access schedule records.
+      allow read, write: if isAdmin() || isCaptain(captainId);
 
       match /{subcollection=**} {
-        allow read, write: if false; // Test endpoint disabled; never expose test data publicly.
+        allow read, write: if isAdmin() || isCaptain(captainId);
       }
     }
 
