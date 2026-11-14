@@ -4,7 +4,6 @@ import {
   addDoc,
   serverTimestamp,
   query,
-  orderBy,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from '../firebase/config';
 import { COLLECTIONS } from './collections';
@@ -22,15 +21,15 @@ function normalizeIsoDate(val: any): string {
 
 function mapDocToPayment(id: string, data: Record<string, any>): Payment {
   const txnId = data.transactionId || data.transactionNumber || data.reference || data.txnId || `#TXN-${id.slice(0, 6).toUpperCase()}`;
-  const isoCreatedAt = normalizeIsoDate(data.createdAt || data.date);
+  const isoCreatedAt = normalizeIsoDate(data.createdAt || data.updatedAt || data.date);
   return {
     id,
     transactionId: txnId,
     transactionNumber: txnId,
     restaurantId: data.restaurantId || '',
     restaurantName: data.restaurantName || data.merchantName || 'تاجر غير محدد',
-    amount: typeof data.amount === 'number' ? data.amount : Number(data.amount) || 0,
-    paymentMethod: (data.paymentMethod as PaymentMethod) || (data.method === 'card' ? 'Visa' : 'Mobile Wallet'),
+    amount: typeof data.amount === 'number' ? data.amount : (Number(data.amount) || Number(data.amountCents) / 100 || 0),
+    paymentMethod: (data.paymentMethod as PaymentMethod) || (data.integrationId ? 'Paymob' : data.method === 'card' ? 'Visa' : data.method === 'wallet' ? 'Mobile Wallet' : 'غير محدد'),
     status: (data.status as PaymentStatus) || 'success',
     date: typeof data.date === 'string' && data.date ? data.date : isoCreatedAt.split('T')[0],
     createdAt: isoCreatedAt,
@@ -46,7 +45,7 @@ export const PaymentService = {
     }
 
     try {
-      const q = query(collection(db, COLLECTIONS.PAYMENTS), orderBy('createdAt', 'desc'));
+      const q = query(collection(db, COLLECTIONS.PAYMENTS));
       const snapshot = await getDocs(q);
 
       if (snapshot.empty) {
