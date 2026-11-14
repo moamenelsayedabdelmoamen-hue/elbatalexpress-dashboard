@@ -65,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // 1. Check for persisted demo session
     const savedDemo = localStorage.getItem('elbatal_demo_admin_session');
-    if (savedDemo === 'true') {
+    if (savedDemo === 'true' && import.meta.env.DEV) {
       const demoEmail = 'admin@elbatalexpress.com';
       const isMaster = isMasterAdminEmail(demoEmail);
       setUser({
@@ -85,23 +85,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2. If Firebase Auth is not configured (e.g. preview environment without VITE_FIREBASE_API_KEY)
     if (!isFirebaseConfigured || !auth) {
-      const explicitLogout = sessionStorage.getItem('elbatal_explicit_logout') === 'true';
-      if (!explicitLogout) {
-        // Auto-enable demo session so reviewer immediately sees the full working application
+      // Demo access is development-only. Never grant admin privileges in a production build
+      // when Firebase Authentication is missing or misconfigured.
+      if (import.meta.env.DEV && sessionStorage.getItem('elbatal_explicit_logout') !== 'true') {
         const demoEmail = 'admin@elbatalexpress.com';
-        const isMaster = isMasterAdminEmail(demoEmail);
         setUser({
           uid: 'admin_preview_master',
           email: demoEmail,
-          displayName: 'مدير النظام (Admin)',
+          displayName: 'مدير النظام (وضع تجريبي)',
           role: 'admin',
           isAdmin: true,
-          isMasterAdmin: isMaster,
+          isMasterAdmin: false,
         });
         setIsAdmin(true);
-        setIsMasterAdmin(isMaster);
-        setClaims({ role: 'admin' });
+        setIsMasterAdmin(false);
+        setClaims({ role: 'admin', demo: true });
       } else {
+        localStorage.removeItem('elbatal_demo_admin_session');
         setUser(null);
         setIsAdmin(false);
         setIsMasterAdmin(false);
@@ -232,25 +232,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, pass: string) => {
     if (!auth || !isFirebaseConfigured) {
-      // In environment without real Firebase Auth API key, allow logging in with the entered credentials
-      // and grant admin session smoothly so the user can test with their own email
-      localStorage.setItem('elbatal_demo_admin_session', 'true');
-      sessionStorage.removeItem('elbatal_explicit_logout');
-      const cleanEmail = email.trim() || 'admin@elbatalexpress.com';
-      const namePart = cleanEmail.split('@')[0] || 'مسؤول النظام';
-      const isMaster = isMasterAdminEmail(cleanEmail);
-      setUser({
-        uid: 'admin_preview_' + Math.random().toString(36).substring(2, 9),
-        email: cleanEmail,
-        displayName: `${namePart} (Admin)`,
-        role: 'admin',
-        isAdmin: true,
-        isMasterAdmin: isMaster,
-      });
-      setIsAdmin(true);
-      setIsMasterAdmin(isMaster);
-      setClaims({ role: 'admin' });
-      return;
+      if (import.meta.env.DEV) {
+        localStorage.setItem('elbatal_demo_admin_session', 'true');
+        sessionStorage.removeItem('elbatal_explicit_logout');
+        const cleanEmail = email.trim() || 'admin@elbatalexpress.com';
+        setUser({
+          uid: 'admin_preview_' + Math.random().toString(36).substring(2, 9),
+          email: cleanEmail,
+          displayName: `${cleanEmail.split('@')[0] || 'مسؤول النظام'} (وضع تجريبي)`,
+          role: 'admin',
+          isAdmin: true,
+          isMasterAdmin: false,
+        });
+        setIsAdmin(true);
+        setIsMasterAdmin(false);
+        setClaims({ role: 'admin', demo: true });
+        return;
+      }
+      throw new Error('Firebase Authentication غير مهيأ. لا يمكن تسجيل الدخول بأمان.');
     }
 
     const cred = await signInWithEmailAndPassword(auth, email, pass);
