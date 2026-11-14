@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Payment } from '../types';
 import { PaymentService } from '../services/paymentService';
+import { createPaymobPayment } from '../services/paymobService';
 import { RestaurantService } from '../services/restaurantService';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { EmptyState } from '../components/common/EmptyState';
@@ -25,7 +26,7 @@ export const PaymentsPage: React.FC = () => {
   const { success, error: toastError } = useToast();
 
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [restaurants, setRestaurants] = useState<{ id: string; name: string }[]>([]);
+  const [restaurants, setRestaurants] = useState<{ id: string; name: string; phone?: string; email?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'pending' | 'failed'>('all');
@@ -53,7 +54,7 @@ export const PaymentsPage: React.FC = () => {
         RestaurantService.getAll(),
       ]);
       setPayments(payRes.data);
-      setRestaurants(restRes.data.map((r) => ({ id: r.id, name: r.name })));
+      setRestaurants(restRes.data.map((r) => ({ id: r.id, name: r.name, phone: r.phone, email: r.ownerEmail || r.raw?.email || r.raw?.ownerEmail })));
     } catch (err) {
       console.error('Failed to load payments:', err);
       toastError('فشل تحميل سجل المعاملات المالية');
@@ -96,6 +97,26 @@ export const PaymentsPage: React.FC = () => {
 
     setActionLoading(true);
     try {
+      const selectedRestaurant = restaurants.find((restaurant) => restaurant.name === formData.restaurantName);
+      if (formData.paymentMethod === 'Paymob - بطاقة بنكية' || formData.paymentMethod === 'Paymob - محفظة إلكترونية') {
+        if (!selectedRestaurant?.id) throw new Error('تعذر تحديد التاجر المختار.');
+        const customerEmail = selectedRestaurant.email;
+        const phone = selectedRestaurant.phone || '';
+        if (!customerEmail || customerEmail === '—') throw new Error('يجب إضافة بريد إلكتروني صحيح للتاجر في بياناته قبل إنشاء الدفع.');
+        if (formData.paymentMethod.includes('محفظة') && (!phone || phone === '—')) throw new Error('يجب إضافة رقم هاتف صحيح للتاجر قبل الدفع بالمحفظة.');
+        const nameParts = selectedRestaurant.name.trim().split(/\\s+/);
+        const payment = await createPaymobPayment({
+          restaurantId: selectedRestaurant.id,
+          email: customerEmail,
+          firstName: nameParts[0] || 'Merchant',
+          lastName: nameParts.slice(1).join(' ') || 'Customer',
+          phone,
+          method: formData.paymentMethod.includes('محفظة') ? 'wallet' : 'card',
+        });
+        window.location.assign(payment.url);
+        return;
+      }
+
       const newPay = await PaymentService.create({
         restaurantName: formData.restaurantName,
         amount: Number(formData.amount),
@@ -109,7 +130,7 @@ export const PaymentsPage: React.FC = () => {
       success('تم تسجيل المعاملة المالية بنجاح');
       setIsAddModalOpen(false);
     } catch (err) {
-      toastError('فشل تسجيل المعاملة');
+      toastError(err instanceof Error ? err.message : 'فشل تسجيل المعاملة');
     } finally {
       setActionLoading(false);
     }
@@ -446,7 +467,7 @@ export const PaymentsPage: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
                   className="w-full bg-[#0a0c12] border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500"
                 >
-                  <option value="فودافون كاش (Vodafone Cash)">فودافون كاش (Vodafone Cash)</option>
+                  <option value="Paymob - بطاقة بنكية">Paymob - بطاقة بنكية</option>\n                  <option value="Paymob - محفظة إلكترونية">Paymob - محفظة إلكترونية</option>\n                  <option value="فودافون كاش (Vodafone Cash)">فودافون كاش (Vodafone Cash)</option>
                   <option value="محفظة إلكترونية (Smart Wallet)">محفظة إلكترونية (Smart Wallet)</option>
                   <option value="تحويل بنكي / InstaPay">تحويل بنكي / InstaPay</option>
                   <option value="كاش نقدي (Cash)">كاش نقدي (Cash)</option>
@@ -489,7 +510,7 @@ export const PaymentsPage: React.FC = () => {
                   disabled={actionLoading}
                   className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold transition-colors disabled:opacity-50"
                 >
-                  {actionLoading ? 'جاري التسجيل...' : 'تسجيل المعاملة'}
+                  {actionLoading ? 'جاري المعالجة...' : formData.paymentMethod.startsWith('Paymob') ? 'إنشاء رابط الدفع' : 'تسجيل المعاملة'}
                 </button>
               </div>
             </form>
