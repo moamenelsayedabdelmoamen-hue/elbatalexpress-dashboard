@@ -4,7 +4,6 @@ import {
   addDoc,
   serverTimestamp,
   query,
-  orderBy,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from '../firebase/config';
 import { COLLECTIONS } from './collections';
