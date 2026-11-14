@@ -102,7 +102,8 @@ export const PaymentsPage: React.FC = () => {
         if (!selectedRestaurant?.id) throw new Error('تعذر تحديد التاجر المختار.');
         const customerEmail = selectedRestaurant.email;
         const phone = selectedRestaurant.phone || '';
-        if (!customerEmail) throw new Error('يجب إضافة بريد إلكتروني للتاجر في بياناته قبل إنشاء الدفع.');
+        if (!customerEmail || customerEmail === '—') throw new Error('يجب إضافة بريد إلكتروني صحيح للتاجر في بياناته قبل إنشاء الدفع.');
+        if (formData.paymentMethod.includes('محفظة') && (!phone || phone === '—')) throw new Error('يجب إضافة رقم هاتف صحيح للتاجر قبل الدفع بالمحفظة.');
         const nameParts = selectedRestaurant.name.trim().split(/\\s+/);
         const payment = await createPaymobPayment({
           restaurantId: selectedRestaurant.id,
